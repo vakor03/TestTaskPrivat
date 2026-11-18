@@ -1,0 +1,51 @@
+services:
+  pg-primary:
+    build: ./docker
+    image: t1-postgres-cron:17
+    container_name: t1-primary
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_worker_processes=32
+      - -c
+      - shared_preload_libraries=pg_cron
+      - -c
+      - cron.database_name=app
+      - -c
+      - cron.use_background_workers=on
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./sql/primary:/docker-entrypoint-initdb.d:ro
+      - primary-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d app"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  pg-replica:
+    image: postgres:17-bookworm
+    container_name: t1-replica
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./sql/replica:/docker-entrypoint-initdb.d:ro
+      - replica-data:/var/lib/postgresql/data
+    depends_on:
+      pg-primary:
+        condition: service_healthy
+
+volumes:
+  primary-data:
+  replica-data:
